@@ -10,8 +10,12 @@ on:
         options:
           - browser
           - accessibility
-          - browser and accessibility
   workflow_call:
+    inputs:
+      suite:
+        description: Which test suites to run
+        type: string
+        default: browser
 
 defaults:
   run:
@@ -23,7 +27,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: browser-tests
+  group: browser-tests-${{ inputs.suite }}
   cancel-in-progress: false
 
 jobs:
@@ -31,7 +35,6 @@ jobs:
     name: Browser tests
     runs-on: ubuntu-latest
     environment: aws-dev
-    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'browser' || inputs.suite == 'browser and accessibility'
 
     steps:
       - name: Check out code
@@ -52,40 +55,8 @@ jobs:
 
       - name: Run browser tests in CodeBuild
         uses: aws-actions/aws-codebuild-run-build@7e46c3fa1c1f217e26a73712796b1f78938b534b # v1.0.19
-        with:
-          project-name: hfu-browser-tests-codebuild-dev
-          source-type-override: S3
-          source-location-override: hfurb-data-deployments-source-code-bucket-dev/hfu-browser-tests.zip
-
-  accessibility-tests:
-    name: Accessibility tests
-    runs-on: ubuntu-latest
-    environment: aws-dev
-    needs: browser-tests
-    if: always() && github.event_name == 'workflow_dispatch' && (inputs.suite == 'accessibility' || inputs.suite == 'browser and accessibility')
-    continue-on-error: true
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Zip source repository
-        run: zip -r -q hfu-browser-tests.zip . -x '.git/*'
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
-        with:
-          aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ vars.AWS_CODEBUILD_ROLE_TO_ASSUME }}
-          role-session-name: AccessibilityTests-${{ github.run_id }}
-
-      - name: Upload zip to S3
-        run: aws s3 cp hfu-browser-tests.zip s3://hfurb-data-deployments-source-code-bucket-dev/hfu-browser-tests.zip
-
-      - name: Run accessibility tests in CodeBuild
-        uses: aws-actions/aws-codebuild-run-build@7e46c3fa1c1f217e26a73712796b1f78938b534b # v1.0.19
         env:
-          BROWSER_TEST_SUITE: accessibility
+          BROWSER_TEST_SUITE: ${{ inputs.suite }}
         with:
           project-name: hfu-browser-tests-codebuild-dev
           source-type-override: S3
